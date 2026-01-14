@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rinet"
+version = "0.1.0"
+dependencies = [
+    "pandas==2.3.3",
+    "numpy",
+    "matplotlib==3.10.8",
+    "tensorflow==2.20.0",
+    "keras-tuner==1.4.8",
+    "tqdm==4.67.1",
+    "scikit-learn==1.7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
