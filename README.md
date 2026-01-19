@@ -4,7 +4,7 @@ RINet is a deep learning framework for indirect estimation of clinical reference
 
 The repository contains code used in the accompanying publication and supports data simulation, model training, hyperparameter search, and benchmarking.
 
-For R implementation code see: https://github.com/jackgle/rinet_r_package
+For R implementation: Install from CRAN with `install.packages("rinet")` or see the [source repository](https://github.com/jackgle/rinet_r_package)
 
 
 ## Project Structure
