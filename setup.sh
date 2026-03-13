@@ -4,7 +4,7 @@ set -e  # stop on error
 echo "=== Setting up environment ==="
 
 conda update -n base -c conda-forge conda -y
-conda install -c conda-forge r-base=4.5.1 -y
+conda install -c conda-forge r-base=4.5.2 -y
 
 mkdir -p ~/R/library
 echo 'R_LIBS_USER="~/R/library"' >> ~/.Renviron

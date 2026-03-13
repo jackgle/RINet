@@ -166,13 +166,11 @@ class RINetV1Pipeline:
 
     def load(
         self,
-        model_save_path
+        model_save_path,
+        model_file='model.keras'
     ):
-        
-        if not self.model:
-            self._build_model()
-        self.model.load_weights(model_save_path + '/model.weights.h5')
-        
+        self.model = keras.models.load_model(f"{model_save_path}/{model_file}")
+
         scaler = pickle.load(open(model_save_path+'/scaler.pkl', 'rb'))
         self.scaler = scaler
 
@@ -405,15 +403,10 @@ class RINetV2Pipeline:
     def load(
         self,
         model_save_path,
-        model_file=None
+        model_file='model.keras'
     ):
-        if model_file is None:
-            if not self.model:
-                self._build_model()
-            self.model.load_weights(model_save_path + '/model.weights.h5')
-        else:
-            self.model = keras.models.load_model(f"{model_save_path}/{model_file}")
-        
+        self.model = keras.models.load_model(f"{model_save_path}/{model_file}")
+
         scaler = pickle.load(open(model_save_path+'/scaler.pkl', 'rb'))
         self.scaler = scaler
 

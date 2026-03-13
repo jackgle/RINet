@@ -9,9 +9,17 @@
 *.pb
 *.zip
 *.png
+*.Rdata
 **/.ipynb_checkpoints/
 **/__pycache__/
 **/model_checkpoint/
 **/archive/
 **/apply/
 **/refineR/
+tmp/
+archive/
+.claude/
+**/.DS_Store
+**/.vscode/
+src/rinet.egg-info/
+evaluation/benchmarking/ribench/results/
