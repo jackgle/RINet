@@ -6,6 +6,8 @@ The repository contains code used in the accompanying publication and supports d
 
 For R implementation: Install from CRAN with `install.packages("rinet")` or see the [source repository](https://github.com/jackgle/rinet_r_package)
 
+For RINetv1 code, please see this [repository](https://github.com/jackgle/rinet_v1)
+
 
 ## Project Structure
 
