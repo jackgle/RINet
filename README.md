@@ -24,7 +24,7 @@ evaluation/
 ## Installation
 
 ```bash
-./setup.sh
+./setup.sh   # creates a "rinet" conda env; then pick the conda_rinet kernel
 ```
 
 ## Citation
