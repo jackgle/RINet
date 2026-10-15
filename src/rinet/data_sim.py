@@ -63,63 +63,9 @@ def correlation_to_covariance(corr, stds):
     return cov
 
 
-def random_covariance_matrix(n_dimensions, std_range=[0.5, 1.5], max_corr=0.9):
-    """Generates a random n-dimensional covariance matrix."""
-    correlation_matrix = random_correlation_matrix(n_dimensions, max_corr)
-    std_devs = np.random.uniform(std_range[0], std_range[1], n_dimensions)
-    covariance_matrix = correlation_to_covariance(correlation_matrix, std_devs)
-    return covariance_matrix, correlation_matrix, std_devs
-
-
-def random_gaussian_sample(
-    n_dimensions, mean_range=[-1.5, 1.5], 
-    std_range=[0.5, 1.5], max_corr=0.9, 
-    n_samples=1000
-):
-    """
-    Generates a sample from a random multivariate Gaussian 
-
-    Args:
-        n_dimensions:       matrix dimensionality
-        mean_range:         min/max mean of Gaussian
-        std_range:          min/max std of Gaussian
-        n_samples:          sample size
-    Returns:
-        sample:             vector of points
-        mean_vector:        mean vector
-        correlation_matrix: correlation matrix of random Gaussian
-    """
-    # randomly sample mean
-    mean_vector = np.random.uniform(mean_range[0], mean_range[1], n_dimensions)
-
-    if n_dimensions >= 2:
-        # generate a random correlation matrix
-        covariance_matrix, correlation_matrix, std_devs = random_covariance_matrix(n_dimensions, std_range, max_corr)
-        # take sample
-        sample = np.random.multivariate_normal(mean_vector, covariance_matrix, n_samples)
-    else:
-        # generate random standard deviations
-        std_devs = np.random.uniform(std_range[0], std_range[1], n_dimensions)
-        # take sample
-        sample = np.random.normal(mean_vector, std_devs, (n_samples, n_dimensions))
-        correlation_matrix = None
-
-    return sample, mean_vector, std_devs, correlation_matrix
-
-
-def random_deviation_mean_std(array, stat_range, percent_range):
-    """Adds random variation to a given mean or standard deviation array.
-       The deltas are within a percent of the original possible range of values (e.g. 5% of [-1, 1] = 0.1)
-    """
-    # calculate the lower and upper possible absolute changes
-    delta_interval = (percent_range / 100) * (stat_range[1]-stat_range[0])
-    deltas = np.random.uniform(delta_interval[0], delta_interval[1], size=array.shape)  # random sample changes
-    deltas *= np.random.choice([-1, 1], size=array.shape)  # randomize positive or negative deltas
-    # add deltas to get the new array
-    new_array = array + deltas
-    # limit values?
-    new_array = np.maximum(stat_range[0], np.minimum(new_array, stat_range[1]))  # ensure changes don't exceed chosen limits
-    return new_array
+def log_uniform(low, high, size=None):
+    """Samples uniformly on a log scale between low and high."""
+    return np.exp(np.random.uniform(np.log(low), np.log(high), size))
 
 
 def quantize_data(data, step):
@@ -143,22 +89,29 @@ def random_mixture_sample(
     bg_frac_range=[0.01, 0.1],  # min/max background noise fraction
     bg_scale_range=[5, 10],     # min/max stds from mixture mean for background noise
     max_corr=0.8,               # max variable correlation
-    std_range=[0.5, 2.0],       # min/max Gaussian stdevs
-    mean_range=[-2.5, 2.5],     # min/max Gaussian means
+    shift_range=[1, 8],         # min/max |pathological mean - reference mean| per dimension, in reference SDs (log-uniform)
+    std_ratio_range=[0.4, 2.5], # min/max pathological SD / reference SD per dimension (log-uniform)
     n_samples=10000,            # no. samples
-    quantize_step=0,            # bin size for quantizing
-    pathological_dev_percentage_range=[10, 40]  # percentage pathological component statistics will deviate from reference for >=1D
+    quantize_step=0,            # bin size for quantizing, in reference SDs
 ):
     """
-    Generates a sample from a mixture of random Gaussians
+    Generates a sample from a Gaussian mixture: a standard normal reference
+    component plus pathological components drawn relative to it.
+
+    The reference is fixed at N(0, I) because standardized inputs and targets
+    are invariant to its location and scale, so drawing pathological shifts and
+    widths relative to it gives even coverage of what the model actually sees.
 
     Args:
         See above
     Returns:
-        mixture_sample:   points sampled from a random mixture of Gaussians
-        component_sizes:   size of each Gaussian component, beginning with reference
-        mean_vectors:     list of mean vectors of each Gaussian
-        corr_matrices:    list of correlation matrices of each Gaussian
+        mixture_sample:   points sampled from the mixture
+        mean_vectors:     list of mean vectors of each Gaussian, beginning with reference
+        std_vectors:      list of std vectors of each Gaussian, beginning with reference
+        corr_matrices:    list of correlation matrices of each Gaussian (>=2D only)
+        components:       component label for each point (-1 = background noise)
+        component_sizes:  size of each Gaussian component, beginning with reference,
+                          followed by the background noise size
     """
 
     assert n_dimensions <= 2, (
@@ -166,33 +119,24 @@ def random_mixture_sample(
         "and the current method may lead to unrealistically small determinants"
     )
 
-    # hold component for each point
-    components = []
-
-    # hold statistics for each component
-    corr_matrices = []
-    std_vectors = []
-    mean_vectors = []
-
-    # random reference component
-    if n_components > 0:
-        p_frac = np.random.uniform(p_frac_range[0], p_frac_range[1])
-    else:
-        p_frac = 0
+    p_frac = np.random.uniform(p_frac_range[0], p_frac_range[1]) if n_components > 0 else 0
     bg_frac = np.random.uniform(bg_frac_range[0], bg_frac_range[1])
     ref_size = int(n_samples*(1-p_frac-bg_frac))
-    mixture_sample, mean_vector, std_dev, corr_mat = random_gaussian_sample(
-        n_dimensions=n_dimensions,
-        mean_range=mean_range,
-        std_range=std_range,
-        max_corr=max_corr,
-        n_samples=ref_size
-    )
 
-    components += list(np.zeros(len(mixture_sample)))  # store parameters
-    corr_matrices.append(corr_mat)
-    mean_vectors.append(mean_vector)
-    std_vectors.append(std_dev)
+    # reference component
+    mean_vector = np.zeros(n_dimensions)
+    std_dev = np.ones(n_dimensions)
+    if n_dimensions > 1:
+        corr_mat = random_correlation_matrix(n_dimensions, max_corr)
+        mixture_sample = np.random.multivariate_normal(mean_vector, corr_mat, ref_size)
+    else:
+        corr_mat = None
+        mixture_sample = np.random.normal(0, 1, (ref_size, n_dimensions))
+
+    components = [np.zeros(ref_size)]
+    corr_matrices = [corr_mat]
+    mean_vectors = [mean_vector]
+    std_vectors = [std_dev]
 
     # pathological components
     p_ratios = np.random.uniform(0, 1, n_components)
@@ -201,43 +145,22 @@ def random_mixture_sample(
 
         p_size = int(n_samples*p_frac*p_ratios[i])  # get pathological component size
 
-        # deviate reference parameters based on a 
-        # percentage of the given range
-        if pathological_dev_percentage_range is not None:
-            pathological_dev_percentage_range = np.array(pathological_dev_percentage_range)
+        mv = log_uniform(shift_range[0], shift_range[1], n_dimensions) * \
+            np.random.choice([-1, 1], n_dimensions)
+        std = log_uniform(std_ratio_range[0], std_ratio_range[1], n_dimensions)
 
-            # deviate the mean and standard deviation
-            mv = random_deviation_mean_std(
-                mean_vector, mean_range,
-                pathological_dev_percentage_range
-            )
-            std = random_deviation_mean_std(
-                std_dev, std_range,
-                pathological_dev_percentage_range
-            )
-
-            if n_dimensions > 1:  # convert correlation to covariance for >1D
-                cvm = correlation_to_covariance(corr_mat, std)
-
-            if n_dimensions > 1:  # take sample
-                gauss_sample = np.random.multivariate_normal(mv, cvm, p_size)
-            else:
-                gauss_sample = np.random.normal(mv, std, (p_size, n_dimensions))
-
-        else:  # continue to sample uniformly across the given ranges
-            gauss_sample, mv, std, cm = random_gaussian_sample(
-                n_dimensions=n_dimensions, 
-                mean_range=mean_range, 
-                std_range=std_range, 
-                n_samples=p_size
-            )
+        if n_dimensions > 1:
+            cvm = correlation_to_covariance(corr_mat, std)
+            gauss_sample = np.random.multivariate_normal(mv, cvm, p_size)
+        else:
+            gauss_sample = np.random.normal(mv, std, (p_size, n_dimensions))
 
         corr_matrices.append(corr_mat)  # store parameters
         mean_vectors.append(mv)
         std_vectors.append(std)
 
         mixture_sample = np.vstack([mixture_sample, gauss_sample])
-        components += list(np.ones(len(gauss_sample))*(i+1))
+        components.append(np.ones(len(gauss_sample))*(i+1))
 
     # background noise
     mixture_mean = mixture_sample.mean(axis=0)
@@ -255,16 +178,13 @@ def random_mixture_sample(
     if quantize_step:
         mixture_sample = quantize_data(mixture_sample, quantize_step)
 
-    components += list(np.ones(bg_noise.shape[0])*-1)
-    components = np.array(components)
+    components.append(np.ones(bg_noise.shape[0])*-1)
+    components = np.concatenate(components)
 
-    component_sizes = [
-        len(np.where(components == i)[0]) for i in
-        sorted(list(set(components)))[1:]
-    ]  # gaussian component sizes
-    component_sizes.append(
-        len(np.where(components == -1)[0])
-    )  # background noise size
+    # count by component index so sizes stay aligned with mean_vectors even
+    # when a small pathological component rounds down to zero points
+    component_sizes = [int(np.sum(components == i)) for i in range(n_components + 1)]
+    component_sizes.append(int(np.sum(components == -1)))  # background noise size
 
     if n_dimensions >= 2:
         return mixture_sample, mean_vectors, std_vectors, \
