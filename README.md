@@ -19,7 +19,7 @@ The simulation and training code in this repository has been updated since the p
   remotes::install_github("jackgle/rinet_r_package")
   ```
 
-- **Reproducing the publication:** the code that reproduces the results reported in the publication is tagged [`jbi-2026`](https://github.com/jackgle/RINet/tree/jbi-2026), the last commit before this update (`git checkout jbi-2026`).
+- **Reproducing the publication:** the code that reproduces the results reported in the publication is tagged [`jbi-2026`](https://github.com/jackgle/RINet/tree/jbi-2026) (`git checkout jbi-2026`).
 
 
 ## Project Structure
