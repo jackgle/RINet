@@ -760,11 +760,12 @@ class RefineRPipeline:
                 model='{model}',
                 warnings=FALSE,
                 NBootstrap={n_boot if inner_boot else 0},
-                return_boot={str(inner_boot).upper()},
                 fix_lambda={fix_lambda}
             ),
-            error = function(e) NULL
-        )
+            error = function(e) {{
+                message("findRI error: ", conditionMessage(e))
+                NULL
+            }}        )
         if (is.null(fit)) {{
             quit(status=1)
         }}
@@ -801,6 +802,7 @@ class RefineRPipeline:
             subprocess.run(["Rscript", r_file], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             # R crashed or refineR failed → return None
+            warnings.warn(f"refineR failed: {e.stderr.strip()}")
             return None
     
         result, boot_params, boot_ri = None, None, None
