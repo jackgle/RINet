@@ -68,31 +68,47 @@ def log_uniform(low, high, size=None):
     return np.exp(np.random.uniform(np.log(low), np.log(high), size))
 
 
-def quantize_data(data, step):
+def quantize_original_scale(data, step, log_sigma_range):
     """
-    Quantize a numpy array to a certain bin size.
+    Quantize log-scale data as laboratory values are rounded: on the original scale.
+
+    The sample is treated as log-scale data whose reference component has unit
+    SD. It is mapped to the original scale with a random log-scale SD sigma
+    (so the reference is log-normal there), rounded to a multiple of
+    step * (original-scale reference SD), and mapped back. The lowest
+    recordable value is one step, as zeros cannot be log-transformed. Because
+    rounding is uniform on the original scale, it is coarser at low values after
+    the log transform, as in real data.
 
     Parameters:
-    data (numpy.ndarray): The input data to be quantized.
-    step (float): The bin size for quantization.
+    data (numpy.ndarray): Samples (n, d) in which the reference component is N(0, 1).
+    step (float): Bin size in SDs of the reference component on the original scale.
+    log_sigma_range (list): Min/max log-scale SD of the reference (log-uniform, per dimension).
 
     Returns:
-    numpy.ndarray: The quantized data.
+    numpy.ndarray: Quantized data, with the reference component again approximately N(0, 1).
     """
-    return np.round(data / step) * step
+    sigma = log_uniform(log_sigma_range[0], log_sigma_range[1], data.shape[1])
+    x = np.exp(sigma * data)
+    reference_sd = np.sqrt((np.exp(sigma**2) - 1) * np.exp(sigma**2))
+    width = step * reference_sd
+    x = np.maximum(np.round(x / width) * width, width)
+    return np.log(x) / sigma
 
 
 def random_mixture_sample(
     n_dimensions=1,             # number of dimensions
     n_components=2,             # number of pathological components
-    p_frac_range=[0.01, 0.40],  # min/max pathological fraction
-    bg_frac_range=[0.01, 0.1],  # min/max background noise fraction
+    p_frac_range=[0, 0.40],     # min/max pathological fraction
+    bg_frac_range=[0, 0.1],     # min/max background noise fraction
+    clean_prob=0.05,             # probability of a clean sample: no pathological components or background noise
     bg_scale_range=[5, 10],     # min/max stds from mixture mean for background noise
     max_corr=0.8,               # max variable correlation
     shift_range=[1, 8],         # min/max |pathological mean - reference mean| per dimension, in reference SDs (log-uniform)
     std_ratio_range=[0.4, 2.5], # min/max pathological SD / reference SD per dimension (log-uniform)
     n_samples=10000,            # no. samples
-    quantize_step=0,            # bin size for quantizing, in reference SDs
+    quantize_step=0,            # bin size for quantizing on the original scale, in reference SDs
+    log_sigma_range=[0.05, 1.0],  # min/max log-scale SD of the reference, used to place the data on the original scale for quantizing
 ):
     """
     Generates a sample from a Gaussian mixture: a standard normal reference
@@ -119,8 +135,9 @@ def random_mixture_sample(
         "and the current method may lead to unrealistically small determinants"
     )
 
-    p_frac = np.random.uniform(p_frac_range[0], p_frac_range[1]) if n_components > 0 else 0
-    bg_frac = np.random.uniform(bg_frac_range[0], bg_frac_range[1])
+    clean = np.random.uniform() < clean_prob
+    p_frac = 0 if clean or n_components == 0 else np.random.uniform(p_frac_range[0], p_frac_range[1])
+    bg_frac = 0 if clean else np.random.uniform(bg_frac_range[0], bg_frac_range[1])
     ref_size = int(n_samples*(1-p_frac-bg_frac))
 
     # reference component
@@ -176,7 +193,7 @@ def random_mixture_sample(
     mixture_sample = np.vstack([mixture_sample, bg_noise])
 
     if quantize_step:
-        mixture_sample = quantize_data(mixture_sample, quantize_step)
+        mixture_sample = quantize_original_scale(mixture_sample, quantize_step, log_sigma_range)
 
     components.append(np.ones(bg_noise.shape[0])*-1)
     components = np.concatenate(components)
